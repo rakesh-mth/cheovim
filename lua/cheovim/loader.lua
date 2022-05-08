@@ -31,7 +31,7 @@ function loader.create_plugin_manager_symlinks(selected_profile, profiles)
 
     -- Override all the default values with the user's options
 	local profile_config = vim.tbl_deep_extend("force", default_config, profiles[selected_profile][2])
-	local root_plugin_dir = vim.fn._stdpath("data") .. "/site/pack"
+	local root_plugin_dir = loader.stdpath_data_orig .. "/site/pack"
 
     -- Delete all symlinks present inside of site/pack
 	for _, symlink in ipairs(vim.fn.glob(root_plugin_dir .. "/*", 0, 1, 1)) do
@@ -43,8 +43,8 @@ function loader.create_plugin_manager_symlinks(selected_profile, profiles)
 
     -- Relink the current config's plugin/ directory with a symlinked version
     -- If we don't do this then packer will write its packer_compiled.vim into a location we cannot track
-	vim.loop.fs_unlink(vim.fn._stdpath("config") .. "/plugin")
-	vim.loop.fs_symlink(vim.fn.stdpath("config") .. "/plugin", vim.fn._stdpath("config") .. "/plugin", { dir = true })
+	vim.loop.fs_unlink(loader.stdpath_config_orig .. "/plugin")
+	vim.loop.fs_symlink(vim.fn.stdpath("config") .. "/plugin", loader.stdpath_config_orig .. "/plugin", { dir = true })
 
     -- Symlink the plugin install location
 	vim.loop.fs_symlink(root_plugin_dir .. "/cheovim/" .. selected_profile, root_plugin_dir .. "/" .. profile_config.plugins, { dir = true })
@@ -181,6 +181,60 @@ function loader.handle_url(selected_profile, profiles)
 
 end
 
+-- helper function to join paths
+function loader.join_paths(...)
+	local path_sep = vim.loop.os_uname().version:match("Windows") and "\\" or "/"
+	local result = table.concat({ ... }, path_sep)
+	return result
+end
+
+function loader.cheovim_profile_setup(selected_profile, profiles)
+	local profile_path = vim.fn.expand(profiles[selected_profile][1])
+	-- no need to delete packer_compiled.lua, since config path will be from current cheovim config.
+	-- vim.fn.delete(loader.stdpath_config_orig .. "/plugin/packer_compiled.lua")
+	-- make sure profile_path is in runtimepath for modules to work (ex doom-nvim)
+	vim.opt.rtp:append(profile_path)
+	-- remove original data/site and data/site/after
+	vim.opt.rtp:remove(loader.join_paths(loader.stdpath_data_orig, "site"))
+	vim.opt.rtp:remove(loader.join_paths(loader.stdpath_data_orig, "site", "after"))
+	-- these will not work since cheovim will override default config path
+	-- default config path needs to be in rtp for cheovim to work correctly.
+	-- vim.opt.rtp:remove(loader.stdpath_config_orig)
+	-- vim.opt.rtp:remove(loader.join_paths(loader.stdpath_config_orig, "after"))
+
+	-- query original data path and append selected_profile in the path for new stdpath("data")
+	local data_path = loader.join_paths(loader.stdpath_data_orig, selected_profile)
+	-- add new data/site and data/site/after
+	vim.opt.rtp:prepend(loader.join_paths(data_path, "site"))
+	vim.opt.rtp:append(loader.join_paths(data_path, "site", "after"))
+	vim.cmd([[let &packpath = &runtimepath]])
+	-- vim.cmd(("echom \"%s\""):format(data_path))
+
+	-- an implementation of stdpath
+	local stdpath_impl = function(what)
+		if what:lower() == "data" then
+			return data_path
+		elseif what:lower() == "cache" then
+			return loader.join_paths(data_path, ".cache")
+		elseif what:lower() == "config" then
+			return profile_path
+		end
+		return vim.fn._stdpath(what)
+	end
+
+	-- Override vim.fn.stdpath and vim.call to manipulate the data returned by it. Yes, I know, changing core functions
+	-- is really bad practice in any codebase, however this is our only way to make things like LunarVim, doom-nvim etc. work
+	vim.fn.stdpath = function(what)
+		return stdpath_impl(what)
+	end
+	vim.call = function(...)
+		if select("#", ...) == 2 and select(1, ...):lower() == "stdpath" then
+			return stdpath_impl(select(2, ...))
+		end
+		return vim._call(...)
+	end
+end
+
 function loader.create_plugin_symlink(selected_profile, profiles)
 
 	local selected = profiles[selected_profile]
@@ -198,23 +252,23 @@ function loader.create_plugin_symlink(selected_profile, profiles)
 	loader.selected_profile = selected_profile
 	loader.profiles = profiles
 
+	-- save original paths
+	loader.stdpath_config_orig = vim.fn.stdpath("config")
+	loader.stdpath_data_orig = vim.fn.stdpath("data")
+	loader.stdpath_cache_orig = vim.fn.stdpath("cache")
+
 	-- Clone the current stdpath function definition into an unused func
 	vim.fn._stdpath = vim.fn.stdpath
+	vim._call = vim.call
 
-	-- Override vim.fn.stdpath to manipulate the data returned by it. Yes, I know, changing core functions
-	-- is really bad practice in any codebase, however this is our only way to make things like LunarVim etc. work
-	vim.fn.stdpath = function(what)
-		if what:lower() == "config" then
-			return selected[1]
-		end
-		return vim.fn._stdpath(what)
-	end
+	-- setup profile, this will hook vim.fn.stdpath and vim.call
+	loader.cheovim_profile_setup(selected_profile, profiles)
 
     -- Set this variable to the site/pack location
-	local root_plugin_dir = vim.fn._stdpath("data") .. "/site/pack"
+	local root_plugin_dir = loader.stdpath_data_orig .. "/site/pack"
 
     -- Unlink the plugins/ directory so packer_compiled.vim doesn't autotrigger
-	vim.loop.fs_unlink(vim.fn._stdpath("config") .. "/plugin")
+	vim.loop.fs_unlink(loader.stdpath_config_orig .. "/plugin")
 
 	if selected[2] and selected[2].url then
 		selected[1] = loader.handle_url(selected_profile, profiles)

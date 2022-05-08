@@ -31,7 +31,29 @@ local profiles = {
 			preconfigure = "packer",
 		}
 	},
+    svim = { "~/.config/nvim-config/svim", {
+          plugins = "packer",
+          preconfigure = "packer:start",
+        }
+    },
+    LunarVim = { "~/.config/nvim-config/LunarVim", {
+            plugins = "packer",
+            setup = function()
+            end,
+            preconfigure = "lunarvim"
+        }
+    },
+    DoomNvim = { "~/.config/nvim-config/doom-nvim", {
+            plugins = "packer",
+            setup = function()
+            end,
+            preconfigure = "doom-nvim"
+        }
+    }
 }
 
 -- return <name_of_config>, <list_of_profiles>
-return "my_config", profiles
+
+local default_profile = 'my_config'
+local selected_profile = load_profile or default_profile
+return selected_profile, profiles
