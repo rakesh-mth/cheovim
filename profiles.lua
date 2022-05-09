@@ -46,6 +46,12 @@ local profiles = {
     DoomNvim = { "~/.config/nvim-config/doom-nvim", {
             plugins = "packer",
             setup = function()
+              local path = "~/.config/nvim-config/doom-nvim"
+              local dir, err_message = vim.loop.fs_scandir(path)
+              vim.cmd(("echom \"%s\""):format(path))
+              if not dir then -- Check whether we already have a pulled repo in that location
+                vim.cmd("!git clone --depth 1 https://github.com/NTBBloodbath/doom-nvim.git" .. " " .. path)
+              end
             end,
             preconfigure = "doom-nvim"
         }

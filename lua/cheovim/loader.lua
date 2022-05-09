@@ -162,7 +162,7 @@ function loader.handle_url(selected_profile, profiles)
 	-- Store the URL in a variable
 	local url = profiles[selected_profile][1]
 	-- Set the install location for remote configurations
-	local cheovim_pulled_config_location = vim.fn._stdpath("data") .. "/cheovim/"
+	local cheovim_pulled_config_location = loader.stdpath_data_orig .. "/cheovim/"
 
 	-- Create the directory if it doesn't already exist
 	vim.fn.mkdir(cheovim_pulled_config_location, "p")
@@ -264,6 +264,13 @@ function loader.create_plugin_symlink(selected_profile, profiles)
 	-- setup profile, this will hook vim.fn.stdpath and vim.call
 	loader.cheovim_profile_setup(selected_profile, profiles)
 
+    -- create new data directory - some profile with not work if this dir does not exist (ex doom-nvim)
+    local profile_data_dir = vim.fn.stdpath('data') -- using hooked fnction
+    local dir, err_message = vim.loop.fs_scandir(profile_data_dir)
+    if not dir then
+        vim.fn.mkdir(profile_data_dir, "p")
+    end
+
     -- Set this variable to the site/pack location
 	local root_plugin_dir = loader.stdpath_data_orig .. "/site/pack"
 
@@ -298,7 +305,7 @@ function loader.create_plugin_symlink(selected_profile, profiles)
 		loader.create_plugin_manager_symlinks(selected_profile, profiles)
 	else -- Else load the config and restore the plugin/ directory
 		dofile(selected[1] .. "/init.lua")
-		vim.loop.fs_symlink(vim.fn.stdpath("config") .. "/plugin", vim.fn._stdpath("config") .. "/plugin", { dir = true })
+		vim.loop.fs_symlink(vim.fn.stdpath("config") .. "/plugin", loader.stdpath_config_orig .. "/plugin", { dir = true })
 	end
 
 end
