@@ -146,7 +146,7 @@ function loader.create_plugin_manager_symlinks(selected_profile, profiles)
     if type(profile_config.setup) == "string" then
         vim.cmd(profile_config.setup)
     elseif type(profile_config.setup) == "function" then
-        profile_config.setup()
+        profile_config.setup(vim.fn.expand(profiles[selected_profile][1]))
     end
 
     -- Invoke the profile's init.lua
