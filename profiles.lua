@@ -35,8 +35,8 @@ local profiles = {
 		}
 	},
     minimal = { default_config_path .. "minimal", {
-            plugins = "packer",
-            preconfigure = "packer",
+            useVimFile = true,
+            noSymlink = true,
         }
     },
     LunarVim = { default_config_path .. "LunarVim", {
@@ -86,7 +86,7 @@ end
 -- nvim --cmd "lua load_profile='DoomNvim'"
 
 -- return <name_of_config>, <list_of_profiles>
-local default_profile = 'my_config'
+local default_profile = 'minimal'
 local selected_profile = load_profile or default_profile
 add_profile(selected_profile, profiles)
 return selected_profile, profiles

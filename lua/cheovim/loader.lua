@@ -15,12 +15,16 @@ function loader.get_profiles(path)
 
 	-- If the profile exists add it to the current path and return it
 	if profiles[selected_profile] then
-		package.path = package.path .. ";" .. profiles[selected_profile][1] .. "/lua/?.lua"
+        if not profiles[selected_profile][2].useVimFile then
+            package.path = package.path .. ";" .. profiles[selected_profile][1] .. "/lua/?.lua"
+        end
 		return selected_profile, profiles
 	end
 end
 
 function loader.create_plugin_manager_symlinks(selected_profile, profiles)
+
+	local profile_path = vim.fn.expand(profiles[selected_profile][1])
 
     -- Construct a default configuration
 	local default_config = {
@@ -44,10 +48,15 @@ function loader.create_plugin_manager_symlinks(selected_profile, profiles)
     -- Relink the current config's plugin/ directory with a symlinked version
     -- If we don't do this then packer will write its packer_compiled.vim into a location we cannot track
 	vim.loop.fs_unlink(loader.stdpath_config_orig .. "/plugin")
-	vim.loop.fs_symlink(vim.fn.stdpath("config") .. "/plugin", loader.stdpath_config_orig .. "/plugin", { dir = true })
+    if not loader.noSymlink then
+        vim.loop.fs_symlink(vim.fn.stdpath("config") .. "/plugin", loader.stdpath_config_orig .. "/plugin", { dir = true })
+    end
 
     -- Symlink the plugin install location
-	vim.loop.fs_symlink(root_plugin_dir .. "/cheovim/" .. selected_profile, root_plugin_dir .. "/" .. profile_config.plugins, { dir = true })
+	vim.loop.fs_unlink(root_plugin_dir .. "/" .. profile_config.plugins)
+    if not loader.noSymlink then
+        vim.loop.fs_symlink(root_plugin_dir .. "/cheovim/" .. selected_profile, root_plugin_dir .. "/" .. profile_config.plugins, { dir = true })
+    end
 
     -- If we want to preconfigure some software
 	if profile_config.preconfigure then
@@ -146,11 +155,15 @@ function loader.create_plugin_manager_symlinks(selected_profile, profiles)
     if type(profile_config.setup) == "string" then
         vim.cmd(profile_config.setup)
     elseif type(profile_config.setup) == "function" then
-        profile_config.setup(vim.fn.expand(profiles[selected_profile][1]))
+        profile_config.setup(profile_path)
     end
 
     -- Invoke the profile's init.lua
-	dofile(profiles[selected_profile][1] .. "/init.lua")
+    if profiles[selected_profile][2].useVimFile then
+        vim.cmd('source ' .. profile_path .. '/init.vim')
+    else
+        dofile(profile_path .. "/init.lua")
+    end
 
 	-- Issue the success message
 	log.info("Successfully loaded new configuration")
@@ -188,7 +201,7 @@ function loader.join_paths(...)
 	return result
 end
 
-function loader.cheovim_profile_setup(selected_profile, profiles)
+function cheovim_profile_setup(selected_profile, profiles)
 	local profile_path = vim.fn.expand(profiles[selected_profile][1])
 	-- no need to delete packer_compiled.lua, since config path will be from current cheovim config.
 	-- vim.fn.delete(loader.stdpath_config_orig .. "/plugin/packer_compiled.lua")
@@ -251,6 +264,8 @@ function loader.create_plugin_symlink(selected_profile, profiles)
 	-- Set the public variables for use by other files
 	loader.selected_profile = selected_profile
 	loader.profiles = profiles
+    -- Set the variable for no symlink 
+    loader.noSymlink = profiles[selected_profile][2].noSymlink and true or false
 
 	-- save original paths
 	loader.stdpath_config_orig = vim.fn.stdpath("config")
@@ -262,9 +277,9 @@ function loader.create_plugin_symlink(selected_profile, profiles)
 	vim._call = vim.call
 
 	-- setup profile, this will hook vim.fn.stdpath and vim.call
-	loader.cheovim_profile_setup(selected_profile, profiles)
+	cheovim_profile_setup(selected_profile, profiles)
 
-    -- create new data directory - some profile with not work if this dir does not exist (ex doom-nvim)
+    -- create new data directory - some profile will not work if this dir does not exist (ex doom-nvim)
     local profile_data_dir = vim.fn.stdpath('data') -- using hooked fnction
     local dir, err_message = vim.loop.fs_scandir(profile_data_dir)
     if not dir then
@@ -296,16 +311,21 @@ function loader.create_plugin_symlink(selected_profile, profiles)
     -- then update the current configuration and reload everything
 	if not symlink then
         loader.profile_changed = true
-		vim.loop.fs_symlink(selected[1], start_directory .. "/cheovim", { dir = true })
+        vim.loop.fs_symlink(selected[1], start_directory .. "/cheovim", { dir = true })
 		loader.create_plugin_manager_symlinks(selected_profile, profiles)
 	elseif symlink ~= selected[1] then
         loader.profile_changed = true
 		vim.loop.fs_unlink(start_directory .. "/cheovim")
-		vim.loop.fs_symlink(selected[1], start_directory .. "/cheovim", { dir = true })
+        vim.loop.fs_symlink(selected[1], start_directory .. "/cheovim", { dir = true })
 		loader.create_plugin_manager_symlinks(selected_profile, profiles)
 	else -- Else load the config and restore the plugin/ directory
-		dofile(selected[1] .. "/init.lua")
-		vim.loop.fs_symlink(vim.fn.stdpath("config") .. "/plugin", loader.stdpath_config_orig .. "/plugin", { dir = true })
+        local profile_path = vim.fn.expand(profiles[selected_profile][1])
+        if profiles[selected_profile][2].useVimFile then
+            vim.cmd('source ' .. profile_path .. '/init.vim')
+        else
+            dofile(profile_path .. "/init.lua")
+            vim.loop.fs_symlink(vim.fn.stdpath("config") .. "/plugin", loader.stdpath_config_orig .. "/plugin", { dir = true })
+        end
 	end
 
 end
