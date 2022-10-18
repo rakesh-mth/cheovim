@@ -225,6 +225,7 @@ function cheovim_profile_setup(selected_profile, profiles)
 
 	-- an implementation of stdpath
 	local stdpath_impl = function(what)
+	    -- vim.cmd(("echom \"what: %s\""):format(what))
 		if what:lower() == "data" then
 			return data_path
 		elseif what:lower() == "cache" then
@@ -232,6 +233,7 @@ function cheovim_profile_setup(selected_profile, profiles)
 		elseif what:lower() == "config" then
 			return profile_path
 		end
+        -- original stdpath can call vim.call. Additional checks in vim.call prevents infinite loop!
 		return vim.fn._stdpath(what)
 	end
 
@@ -242,7 +244,11 @@ function cheovim_profile_setup(selected_profile, profiles)
 	end
 	vim.call = function(...)
 		if select("#", ...) == 2 and select(1, ...):lower() == "stdpath" then
-			return stdpath_impl(select(2, ...))
+            local what = select(2, ...)
+            if what:lower() == "data" and what:lower() == "cache" and what:lower() == "config" then
+                -- vim.cmd(("echom \"what_from_call: %s\""):format(what))
+                return stdpath_impl(select(2, ...))
+            end
 		end
 		return vim._call(...)
 	end
