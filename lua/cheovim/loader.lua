@@ -217,11 +217,15 @@ function cheovim_profile_setup(selected_profile, profiles)
 
 	-- query original data path and append selected_profile in the path for new stdpath("data")
 	local data_path = loader.join_paths(loader.stdpath_data_orig, selected_profile)
+	local cache_path = loader.join_paths(loader.stdpath_cache_orig, selected_profile)
+	local state_path = loader.join_paths(loader.stdpath_state_orig, selected_profile)
 	-- add new data/site and data/site/after
 	vim.opt.rtp:prepend(loader.join_paths(data_path, "site"))
 	vim.opt.rtp:append(loader.join_paths(data_path, "site", "after"))
 	vim.cmd([[let &packpath = &runtimepath]])
 	-- vim.cmd(("echom \"%s\""):format(data_path))
+	-- vim.cmd(("echom \"%s\""):format(cache_path))
+	-- vim.cmd(("echom \"%s\""):format(state_path))
 
 	-- an implementation of stdpath
 	local stdpath_impl = function(what)
@@ -229,9 +233,11 @@ function cheovim_profile_setup(selected_profile, profiles)
 		if what:lower() == "data" then
 			return data_path
 		elseif what:lower() == "cache" then
-			return loader.join_paths(data_path, ".cache")
+			return cache_path
 		elseif what:lower() == "config" then
 			return profile_path
+		elseif what:lower() == "state" then
+			return state_path
 		end
         -- original stdpath can call vim.call. Additional checks in vim.call prevents infinite loop!
 		return vim.fn._stdpath(what)
@@ -245,7 +251,8 @@ function cheovim_profile_setup(selected_profile, profiles)
 	vim.call = function(...)
 		if select("#", ...) == 2 and select(1, ...):lower() == "stdpath" then
             local what = select(2, ...)
-            if what:lower() == "data" and what:lower() == "cache" and what:lower() == "config" then
+            if what:lower() == "data" and what:lower() == "cache" and
+                what:lower() == "config" and what:lower() == "state" then
                 -- vim.cmd(("echom \"what_from_call: %s\""):format(what))
                 return stdpath_impl(select(2, ...))
             end
@@ -277,6 +284,7 @@ function loader.create_plugin_symlink(selected_profile, profiles)
 	loader.stdpath_config_orig = vim.fn.stdpath("config")
 	loader.stdpath_data_orig = vim.fn.stdpath("data")
 	loader.stdpath_cache_orig = vim.fn.stdpath("cache")
+	loader.stdpath_state_orig = vim.fn.stdpath("state")
 
 	-- Clone the current stdpath function definition into an unused func
 	vim.fn._stdpath = vim.fn.stdpath
